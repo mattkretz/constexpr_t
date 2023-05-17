@@ -11,7 +11,7 @@ static_assert(std::cc<1.f> == 1.f);
 static_assert(std::constexpr_value<std::constexpr_t<1>>);
 
 template <auto _Xp>
-  struct Foo
+  struct Derived
   : std::constexpr_t<_Xp>
   {};
 
@@ -146,12 +146,12 @@ test()
   check<3>(std::cc<1> + std::cc<2>);
   check<4uz>(std::cc<1> + std::extent<int[3]>());
   check<5uz>(std::extent<int[3]>() + std::cc<2>);
-  check<6uz>(Foo<3>() + std::extent<int[3]>());
-  check<7uz>(std::extent<int[5]>() + Foo<2>());
-  check<3>(std::cc<1> + Foo<2>());
-  check<9>(Foo<1>() + std::cc<8>);
-  check<10>(Foo<2>() + Foo<8>());
-  check<16>(Foo<8>() + Foo<8>());
+  check<6uz>(Derived<3>() + std::extent<int[3]>());
+  check<7uz>(std::extent<int[5]>() + Derived<2>());
+  check<3>(std::cc<1> + Derived<2>());
+  check<9>(Derived<1>() + std::cc<8>);
+  check<10>(Derived<2>() + Derived<8>());
+  check<16>(Derived<8>() + Derived<8>());
   check<Test{}>(std::cc<Test{}>);
   check<5>(std::cc<Test{2}>(std::cc<1>, std::cc<2>));
   check<9>(std::cc<Test{}>[std::cc<1>, std::cc<2>, std::cc<5>]);
