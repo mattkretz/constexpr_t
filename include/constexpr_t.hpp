@@ -9,7 +9,7 @@
 
 namespace std
 {
-  template <auto _Xp>
+  template <auto _Xp, typename = std::remove_const_t<decltype(_Xp)>>
     struct constexpr_t;
 
   // *** constexpr_value<T, U = void> ***
@@ -42,7 +42,7 @@ namespace std
 
   // no type parameter, use `constexpr_value<type> auto` instead if you need to
   // constrain the type
-  template <auto _Xp>
+  template <auto _Xp, typename>
     struct constexpr_t
     {
       using value_type = std::remove_const_t<decltype(_Xp)>;

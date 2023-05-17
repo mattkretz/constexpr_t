@@ -66,6 +66,20 @@ template <strlit chars>
   operator"" _sc()
   { return {}; }
 
+struct NeedsAdl
+{
+  int value = 0;
+
+  constexpr
+  NeedsAdl(int x)
+  : value(x)
+  {}
+
+  friend constexpr int
+  operator+(NeedsAdl a, NeedsAdl b)
+  { return a.value + b.value; }
+};
+
 template <auto Expected, std::constexpr_value C>
   void
   check(C x)
@@ -144,6 +158,8 @@ test()
   check<1>(std::cc<Test{}>[]);
   check<"foo"_sc.value>("foo"_sc);
   check<'f'>(("foo"_sc)[std::cc<0>]);
+  check<2>(std::cc<NeedsAdl(1)> + std::cc<1>);
+  check<2>(std::cc<1> + std::cc<NeedsAdl(1)>);
 
   // error: 'std::strong_ordering' is not a valid type for a template non-type parameter because it
   // is not structural
@@ -174,5 +190,7 @@ test()
   check<int>(std::cc<1> + 0);
   check<int>(1 + std::cc<1>);
   check<char>(("foo"_sc)[0]); // this is consistent with the two lines above
+  check<int>(std::cc<NeedsAdl(1)> + 1); // only works via ADL (type template parameter to constexpr_t)
+  check<int>(1 + std::cc<NeedsAdl(1)>); // only works via ADL (type template parameter to constexpr_t)
   check<std::size_t>(std::extent<int[3]>() + std::extent<int[5]>());
 }
