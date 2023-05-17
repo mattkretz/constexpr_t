@@ -4,6 +4,7 @@
  */
 
 #include <constexpr_t.hpp>
+#include <array>
 
 static_assert(std::cc<1> == 1);
 static_assert(std::cc<1.f> == 1.f);
@@ -40,7 +41,7 @@ template <typename Char, std::size_t N>
 
     template <std::size_t... Is>
       constexpr
-      strlit(const Char (&c)[N], std::index_sequence<Is...>)
+      strlit(const Char* c, std::index_sequence<Is...>)
       : value{ c[Is]... }
       {}
 
@@ -58,6 +59,28 @@ template <typename Char, std::size_t N>
 
     constexpr auto
     operator<=>(const strlit&) const = default;
+
+    template <std::size_t M>
+      friend constexpr auto
+      operator+(strlit l, strlit<Char, M> r)
+      {
+        return strlit<Char, N + M - 1>(
+                 [&]<std::size_t... Is>(std::index_sequence<Is...>)
+                   -> std::array<Char, N + M - 2> {
+                     return {(Is < N - 1 ? l.value[Is] : r.value[Is - N + 1])...};
+                   }(std::make_index_sequence<N + M - 2>()).data(),
+                 std::make_index_sequence<N + M - 2>());
+      }
+
+    template <std::size_t M>
+      friend constexpr auto
+      operator+(strlit l, const Char (&r)[M])
+      { return l + strlit(r); }
+
+    template <std::size_t M>
+      friend constexpr auto
+      operator+(const Char (&l)[M], strlit r)
+      { return strlit(l) + r; }
   };
 
 // string constant
@@ -158,6 +181,7 @@ test()
   check<1>(std::cc<Test{}>[]);
   check<"foo"_sc.value>("foo"_sc);
   check<'f'>(("foo"_sc)[std::cc<0>]);
+  check<"foobar"_sc.value>("foo"_sc + "bar"_sc);
   check<2>(std::cc<NeedsAdl(1)> + std::cc<1>);
   check<2>(std::cc<1> + std::cc<NeedsAdl(1)>);
 
@@ -190,7 +214,11 @@ test()
   check<int>(std::cc<1> + 0);
   check<int>(1 + std::cc<1>);
   check<char>(("foo"_sc)[0]); // this is consistent with the two lines above
-  check<int>(std::cc<NeedsAdl(1)> + 1); // only works via ADL (type template parameter to constexpr_t)
-  check<int>(1 + std::cc<NeedsAdl(1)>); // only works via ADL (type template parameter to constexpr_t)
   check<std::size_t>(std::extent<int[3]>() + std::extent<int[5]>());
+
+  // the following only work via ADL (requires type template parameter to constexpr_t)
+  check<int>(std::cc<NeedsAdl(1)> + 1);
+  check<int>(1 + std::cc<NeedsAdl(1)>);
+  check<strlit<char, 7>>("foo"_sc + "bar");
+  check<strlit<char, 7>>("foo" + "bar"_sc);
 }
