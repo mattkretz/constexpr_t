@@ -161,6 +161,30 @@ struct Aaaargh
   { return 5; }
 };
 
+template <typename T, int N>
+struct numarray
+{
+  using V = T[N];
+  V value;
+
+  static constexpr std::integral_constant<std::size_t, N> size{};
+
+  constexpr const T&
+  operator[](std::size_t i) const
+  { return value[i]; }
+
+  friend constexpr numarray
+  operator+(numarray a, numarray b)
+  {
+    return [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+      return numarray{a.value[Is] + b.value[Is]...};
+    }(std::make_index_sequence<N>());
+  }
+
+  friend constexpr bool
+  operator==(const numarray&, const numarray&) = default;
+};
+
 void
 test()
 {
@@ -209,6 +233,13 @@ test()
   check<2>(cca -= std::cc<3u>);
   check<int>(cca->foo());
   check<int>(cca.value.foo());
+
+  constexpr numarray<int, 4> v = {1, 2, 3, 4};
+  constexpr numarray<int, 4> v0 = {};
+  check<v>(std::cc<v> + std::cc<v0>);
+  check<numarray<int, 4>>(std::cc<v> + v0);
+  check<2>(std::cc<v>[std::cc<1>]);
+  check<int>(std::cc<v>[1]);
 
   // NOT constexpr_t:
   check<int>(std::cc<1> + 0);
