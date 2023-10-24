@@ -3,17 +3,24 @@
  *                  Matthias Kretz <m.kretz@gsi.de>
  */
 
-#include <constexpr_t.hpp>
+#include <constexpr_wrapper.hpp>
 #include <array>
 
-static_assert(std::cc<1> == 1);
-static_assert(std::cc<1.f> == 1.f);
+#if defined __clang_major__ and __clang_major__ <= 16
+  // Clang 16 ICEs saying "error: cannot compile this l-value expression yet"
+#define BAD_COMPILER 1
+#endif
 
-static_assert(std::constexpr_value<std::constexpr_t<1>>);
+static_assert(std::cw<1> == 1);
+#if __cpp_nontype_template_args >= 201911L
+static_assert(std::cw<1.f> == 1.f);
+#endif
+
+static_assert(std::constexpr_value<std::constexpr_wrapper<1>>);
 
 template <auto _Xp>
   struct Derived
-  : std::constexpr_t<_Xp>
+  : std::constexpr_wrapper<_Xp>
   {};
 
 struct Test
@@ -85,7 +92,7 @@ template <typename Char, std::size_t N>
 
 // string constant
 template <strlit chars>
-  inline constexpr std::constexpr_t<chars>
+  inline constexpr std::constexpr_wrapper<chars>
   operator"" _sc()
   { return {}; }
 
@@ -107,7 +114,7 @@ template <auto Expected, std::constexpr_value C>
   void
   check(C x)
   {
-    static_assert(std::same_as<C, std::constexpr_t<Expected>>);
+    static_assert(std::same_as<C, std::constexpr_wrapper<Expected>>);
     static_assert(C::value == Expected);
     static_assert(x == Expected);
     static_assert(x.value == Expected);
@@ -152,10 +159,6 @@ struct Aaaargh
   operator->*(int x) const
   { return x + 5; }
 
-  constexpr auto
-  operator->() const
-  { return this; }
-
   constexpr int
   foo() const
   { return 5; }
@@ -188,68 +191,97 @@ struct numarray
 void
 test()
 {
-  // all of the following find the hidden friends in constexpr_t via ADL:
-  check<2>(std::cc<1> + std::cc<1>);
-  check<3>(std::cc<1> + std::cc<2>);
-  check<4uz>(std::cc<1> + std::extent<int[3]>());
-  check<5uz>(std::extent<int[3]>() + std::cc<2>);
+  // all of the following find the hidden friends in constexpr_wrapper via ADL:
+  check<2>(std::cw<1> + std::cw<1>);
+  check<3>(std::cw<1> + std::cw<2>);
+  check<4uz>(std::cw<1> + std::extent<int[3]>());
+  check<5uz>(std::extent<int[3]>() + std::cw<2>);
   check<6uz>(Derived<3>() + std::extent<int[3]>());
   check<7uz>(std::extent<int[5]>() + Derived<2>());
-  check<3>(std::cc<1> + Derived<2>());
-  check<9>(Derived<1>() + std::cc<8>);
+  check<3>(std::cw<1> + Derived<2>());
+  check<9>(Derived<1>() + std::cw<8>);
   check<10>(Derived<2>() + Derived<8>());
   check<16>(Derived<8>() + Derived<8>());
-  check<Test{}>(std::cc<Test{}>);
-  check<5>(std::cc<Test{2}>(std::cc<1>, std::cc<2>));
-  check<9>(std::cc<Test{}>[std::cc<1>, std::cc<2>, std::cc<5>]);
-  check<1>(std::cc<Test{}>[]);
+  check<Test{}>(std::cw<Test{}>);
+  check<5>(std::cw<Test{2}>(std::cw<1>, std::cw<2>));
+#if not BAD_COMPILER
+#if __cpp_multidimensional_subscript
+  check<9>(std::cw<Test{}>[std::cw<1>, std::cw<2>, std::cw<5>]);
+  check<1>(std::cw<Test{}>[]);
+#endif
+  check<'f'>(("foo"_sc)[std::cw<0>]);
+#endif
   check<"foo"_sc.value>("foo"_sc);
-  check<'f'>(("foo"_sc)[std::cc<0>]);
   check<"foobar"_sc.value>("foo"_sc + "bar"_sc);
-  check<2>(std::cc<NeedsAdl(1)> + std::cc<1>);
-  check<2>(std::cc<1> + std::cc<NeedsAdl(1)>);
+  check<2>(std::cw<NeedsAdl(1)> + std::cw<1>);
+  check<2>(std::cw<1> + std::cw<NeedsAdl(1)>);
 
   // error: 'std::strong_ordering' is not a valid type for a template non-type parameter because it
   // is not structural
   //check<std::strong_ordering::less>("fob"_sc <=> "foo"_sc);
 
-  check<-1>(std::cc<1> - std::cc<2>);
-  check<4.>(std::cc<2.> * std::cc<2.>);
-  check<4.f>(std::cc<8.f> / std::cc<2.f>);
-  check<2u>(std::cc<8u> % std::cc<3u>);
-  check<1u>(std::cc<9u> & std::cc<3u>);
-  check<11u>(std::cc<9u> | std::cc<3u>);
-  check<10u>(std::cc<9u> ^ std::cc<3u>);
+  check<-1>(std::cw<1> - std::cw<2>);
+#if __cpp_nontype_template_args >= 201911L
+  check<4.>(std::cw<2.> * std::cw<2.>);
+  check<4.f>(std::cw<8.f> / std::cw<2.f>);
+#endif
+  check<2u>(std::cw<8u> % std::cw<3u>);
+  check<1u>(std::cw<9u> & std::cw<3u>);
+  check<11u>(std::cw<9u> | std::cw<3u>);
+  check<10u>(std::cw<9u> ^ std::cw<3u>);
 
   constexpr Aaaargh a;
-  auto cca = std::cc<a>;
+  auto cca = std::cw<a>;
   check<1>(++cca);
   check<2>(cca++);
   check<3>(--cca);
   check<4>(cca--);
-  check<9>(cca->*(std::cc<4u>));
-  check<3>(cca  = std::cc<3u>);
-  check<4>(cca += std::cc<3u>);
-  check<2>(cca -= std::cc<3u>);
+  check<9>(cca->*(std::cw<4u>));
+  check<3>(cca  = std::cw<3u>);
+  check<4>(cca += std::cw<3u>);
+  check<2>(cca -= std::cw<3u>);
   check<int>(cca->foo());
   check<int>(cca.value.foo());
 
   constexpr numarray<int, 4> v = {1, 2, 3, 4};
   constexpr numarray<int, 4> v0 = {};
-  check<v>(std::cc<v> + std::cc<v0>);
-  check<numarray<int, 4>>(std::cc<v> + v0);
-  check<2>(std::cc<v>[std::cc<1>]);
-  check<int>(std::cc<v>[1]);
+  check<v>(std::cw<v> + std::cw<v0>);
+  check<numarray<int, 4>>(std::cw<v> + v0);
+#if not BAD_COMPILER
+  check<2>(std::cw<v>[std::cw<1>]);
+  check<int>(std::cw<v>[1]);
+#endif
 
-  // NOT constexpr_t:
-  check<int>(std::cc<1> + 0);
-  check<int>(1 + std::cc<1>);
+  // NOT constexpr_wrapper:
+  check<int>(std::cw<1> + 0);
+  check<int>(1 + std::cw<1>);
+#if not BAD_COMPILER
   check<char>(("foo"_sc)[0]); // this is consistent with the two lines above
+#endif
   check<std::size_t>(std::extent<int[3]>() + std::extent<int[5]>());
 
-  // the following only work via ADL (requires type template parameter to constexpr_t)
-  check<int>(std::cc<NeedsAdl(1)> + 1);
-  check<int>(1 + std::cc<NeedsAdl(1)>);
+  // the following only work via ADL (requires type template parameter to constexpr_wrapper)
+  check<int>(std::cw<NeedsAdl(1)> + 1);
+  check<int>(1 + std::cw<NeedsAdl(1)>);
   check<strlit<char, 7>>("foo"_sc + "bar");
   check<strlit<char, 7>>("foo" + "bar"_sc);
+
+#if __cpp_lib_constexpr_charconv >= 202207L && __cplusplus > 202002L
+  using namespace std::literals;
+  check<3>(1cw + 2cw);
+  check<(signed char)(1)>(1cw);
+  check<(signed char)(127)>(127cw);
+  check<short(128)>(128cw);
+  check<60'000>(60'000cw);
+  check<2'000'000'000>(2'000'000'000cw);
+  check<-2'000'000'000>(-2'000'000'000cw);
+  check<4'000'000'000L>(4'000'000'000cw);
+  check<4'000'000'000L>(4'000'000'000cw);
+  check<4'000'000'000L>(4'000'000'000CW);
+  check<9223372036854775807L  >(9223372036854775807cw);
+  check<9223372036854775808ULL>(9223372036854775808cw);
+  check<0xFFFF>(0xFFFFcw);
+  check<0xffff>(0XffffCW);
+  check<(signed char)0b1101>(0b1101CW);
+#endif
 }
