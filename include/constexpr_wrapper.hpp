@@ -8,8 +8,8 @@
 
 #include <algorithm>
 #include <array>
-#include <charconv>
 #include <concepts>
+#include <limits>
 #include <type_traits>
 #include <utility>
 
@@ -359,43 +359,6 @@ namespace std
 #if __cpp_lib_constexpr_charconv >= 202207L && __cplusplus > 202002L
   namespace __detail
   {
-    enum class _CwStatus
-    {
-      __okay,
-      __try_next_type,
-      __error
-    };
-
-    template <typename _Tp>
-      struct _CwResult
-      {
-	_Tp _M_value;
-	_CwStatus _M_status;
-      };
-
-    template <const auto& __arr, int __base,
-	      typename _Tp, typename... _Next>
-      consteval auto
-      __do_parse()
-      {
-	constexpr _CwResult __r1 = []() {
-	  _Tp __x = {};
-	  constexpr int __offset = __base == 10 ? 0 : __base == 8 ? 1 : 2;
-	  constexpr auto __end = __arr.end() - (__base == 16 ? 1 : 0);
-	  const auto __result = std::from_chars(__arr.begin() + __offset, __end, __x, __base);
-	  if (__result.ec == std::errc::result_out_of_range)
-	    return _CwResult<_Tp>{__x, _CwStatus::__try_next_type};
-	  else if (__result.ec != std::errc {} or __result.ptr != __end)
-	    return _CwResult<_Tp>{__x, _CwStatus::__error};
-	  else
-	    return _CwResult<_Tp>{__x, _CwStatus::__okay};
-	}();
-	if constexpr (__r1._M_status == _CwStatus::__try_next_type and sizeof...(_Next))
-	  return __do_parse<__arr, __base, _Next...>();
-	else
-	  return __r1;
-      }
-
     template <char... _Chars>
       consteval auto
       __cw_prepare_array()
@@ -413,17 +376,66 @@ namespace std
       consteval auto
       __cw_parse()
       {
-	static constexpr std::array __arr = __cw_prepare_array<_Chars...>();
+	constexpr std::array __arr = __cw_prepare_array<_Chars...>();
 	constexpr int __base = __arr[0] == '0' and 2 < __arr.size()
 				 ? __arr[1] == 'x' or __arr[1] == 'X' ? 16
 								      : __arr[1] == 'b' ? 2 : 8
 				 : 10;
-	constexpr _CwResult __r
-	  = __do_parse<__arr, __base, signed char, signed short, signed int, signed long,
-		       signed long long, unsigned long long>();
-	static_assert(__r._M_status == _CwStatus::__okay,
-		      "Parsing constexpr_wrapper literal failed.");
-	return __r._M_value;
+        constexpr int __offset = __base == 10 ? 0 : __base == 8 ? 1 : 2;
+	constexpr auto __end = __arr.end() - (__base == 16 ? 1 : 0);
+        constexpr bool __valid_chars = std::all_of(__arr.begin() + __offset, __end, [=](char c) {
+                                       if constexpr (__base == 16)
+                                         return (c >= 'a' and c <= 'f') or (c >= 'A' and c <= 'F')
+                                                  or (c >= '0' and c <= '9');
+                                       else
+                                         return c >= '0' and c < char('0' + __base);
+                                     });
+        static_assert(__valid_chars, "invalid characters in constexpr_wrapper literal");
+
+        // common values, freeing values for error conditions
+        if constexpr (__arr == std::array {'0'})
+          return static_cast<signed char>(0);
+        else if constexpr (__arr == std::array {'1'})
+          return static_cast<signed char>(1);
+        else if constexpr (__arr == std::array {'2'})
+          return static_cast<signed char>(2);
+
+        constexpr unsigned long long __x = [&]() {
+          unsigned long long __x = {};
+          constexpr auto __max = std::numeric_limits<unsigned long long>::max();
+          auto __it = __arr.begin() + __offset;
+          for (; __it != __end; ++__it)
+            {
+              unsigned __nextdigit = *__it - '0';
+              if constexpr (__base == 16)
+                {
+                  if (*__it >= 'a')
+                    __nextdigit = *__it - 'a' + 10;
+                  else if (*__it >= 'A')
+                    __nextdigit = *__it - 'A' + 10;
+                }
+              if (__x > __max / __base)
+                return 0ull;
+              __x *= __base;
+              if (__x > __max - __nextdigit)
+                return 0ull;
+              __x += __nextdigit;
+            }
+          return __x;
+        }();
+        static_assert(__x != 0, "constexpr_wrapper literal value out of range");
+        if constexpr (__x <= std::numeric_limits<signed char>::max())
+          return static_cast<signed char>(__x);
+        else if constexpr (__x <= std::numeric_limits<signed short>::max())
+          return static_cast<signed short>(__x);
+        else if constexpr (__x <= std::numeric_limits<signed int>::max())
+          return static_cast<signed int>(__x);
+        else if constexpr (__x <= std::numeric_limits<signed long>::max())
+          return static_cast<signed long>(__x);
+        else if constexpr (__x <= std::numeric_limits<signed long long>::max())
+          return static_cast<signed long long>(__x);
+        else
+          return __x;
       }
   }
 
