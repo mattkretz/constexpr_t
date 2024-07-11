@@ -75,9 +75,10 @@ namespace std
       // wrapping the result in constexpr_wrapper
 
       // The overload of -> is inconsistent because it cannot wrap its return value in a
-      // constexpr_wrapper. The compiler/standard requires a pointer type. However, -> can work if
-      // it unwraps. The utility is questionable though, which it why may be interesting to
-      // "dereferencing" the wrapper to its value if _Tp doesn't implement operator->.
+      // constexpr_wrapper. The compiler/standard requires a pointer type (not a pointer type
+      // wrapped in constexpr_wrapper). However, -> can work if it unwraps. The utility is
+      // questionable, which is why it may be interesting to "dereference" the wrapper to its
+      // value if _Tp doesn't implement operator->.
       constexpr const auto*
       operator->() const
       {
