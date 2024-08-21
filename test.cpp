@@ -189,8 +189,19 @@ struct numarray
 };
 
 void
+overload(std::constexpr_value auto)
+{}
+
+void
+overload(std::integral auto)
+{}
+
+void
 test()
 {
+  overload(1);
+  overload(std::cw<1>);
+
   // all of the following find the hidden friends in constexpr_wrapper via ADL:
   check<2>(std::cw<1> + std::cw<1>);
   check<3>(std::cw<1> + std::cw<2>);
@@ -245,6 +256,7 @@ test()
 
   constexpr numarray<int, 4> v = {1, 2, 3, 4};
   constexpr numarray<int, 4> v0 = {};
+  static_assert(not std::constexpr_value<numarray<int, 4>>);
   check<v>(std::cw<v> + std::cw<v0>);
   check<numarray<int, 4>>(std::cw<v> + v0);
 #if not BAD_COMPILER
